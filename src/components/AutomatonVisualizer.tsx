@@ -94,14 +94,16 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
-    // Create edges with directional arrows
+    // Create edges with directional arrows - enhanced to better display character transitions
     const graphEdges: Edge[] = automaton.transitions.map((transition) => {
       // Style edges based on symbol type (epsilon vs. character)
       const isEpsilon = transition.symbol === 'ε';
       
+      // Create distinct styling for character vs epsilon transitions
       const edgeStyle = {
-        stroke: isEpsilon ? '#9E86ED' : '#6E59A5',
-        strokeWidth: isEpsilon ? 1.5 : 2.5,
+        stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
+        strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
+        strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
       };
 
       // For self-loops, enhance the visualization
@@ -117,34 +119,42 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         animated: isEpsilon, // animate only epsilon transitions
         labelStyle: { 
           fill: isEpsilon ? '#6E59A5' : '#333', 
-          fontSize: 14,
+          fontSize: isEpsilon ? 13 : 16, // Larger font for character transitions
           fontWeight: isEpsilon ? 'normal' : 'bold',
           background: '#fff',
-          padding: '2px 4px',
+          padding: '3px 6px',
         },
         labelBgStyle: { 
           fill: '#F1F0FB',
-          fillOpacity: 0.8,
-          rx: 4,
-          ry: 4,
+          fillOpacity: 0.9, // Increased opacity for better visibility
+          rx: 8,
+          ry: 8,
         },
         // Add directional arrowhead marker to all transitions
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: isEpsilon ? '#9E86ED' : '#6E59A5',
-          width: 15,
-          height: 15,
+          color: isEpsilon ? '#9E86ED' : '#F97316', // Match edge color
+          width: isEpsilon ? 12 : 18, // Larger arrowhead for character transitions
+          height: isEpsilon ? 12 : 18,
         },
         // Use different edge types for better visualization
-        type: isSelfLoop ? 'default' : 'smoothstep',
+        type: 'default', // Default for all edges, then customize below
         // Configure self-loops with appropriate styling
         ...(isSelfLoop && {
           type: 'default',
           animated: false, // Don't animate self-loops
           style: {
             ...edgeStyle,
-            curvature: 0.5, // Increase curvature for self-loops
+            curvature: 0.8, // Increase curvature for self-loops for better visibility
           },
+          // Add specific settings for self-loops
+          sourceHandle: null,
+          targetHandle: null,
+        }),
+        // Configure regular transitions
+        ...(!isSelfLoop && {
+          type: 'smoothstep',
+          curvature: 0.3,
         }),
       };
     });
@@ -186,7 +196,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           },
           labelStyle: { 
             fill: '#0EA5E9', 
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: 'bold',
           },
           labelBgStyle: { fill: '#F1F0FB' },
@@ -232,6 +242,9 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         });
       }
     }
+
+    // Debug transitions
+    console.log('Transitions:', automaton.transitions);
 
     setNodes(graphNodes);
     setEdges(graphEdges);
