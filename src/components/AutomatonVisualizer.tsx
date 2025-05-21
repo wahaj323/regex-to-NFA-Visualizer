@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Automaton, TestResult } from "@/types/types";
-import { ReactFlow, Controls, MiniMap, Background, Node, Edge, Position, useNodesState, useEdgesState } from "reactflow";
+import { ReactFlow, Controls, MiniMap, Background, Node, Edge, Position, useNodesState, useEdgesState, MarkerType } from "reactflow";
 import "reactflow/dist/style.css";
 
 interface AutomatonVisualizerProps {
@@ -23,8 +23,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       // Calculate node styles based on state type (start, accept)
       const nodeStyle = {
         background: state.isAccept ? '#F2FCE2' : state.isStart ? '#D3E4FD' : '#FFFFFF',
-        borderColor: '#6E59A5',
-        borderWidth: state.isAccept ? 2 : 1,
+        borderColor: state.isAccept ? '#4ade80' : state.isStart ? '#0EA5E9' : '#6E59A5',
+        borderWidth: state.isAccept ? 3 : state.isStart ? 2 : 1,
+        // Double border for accept states
+        boxShadow: state.isAccept ? '0 0 0 2px white, 0 0 0 4px #4ade80' : state.isStart ? '0 0 5px rgba(14, 165, 233, 0.5)' : 'none',
         borderStyle: 'solid',
         padding: '10px',
         width: 70,
@@ -36,12 +38,29 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         fontWeight: 600,
       };
 
-      // Position nodes in a circle layout
+      // Position nodes in a horizontal layout favoring left to right for better readability
       const nodeCount = automaton.states.length;
-      const radius = Math.max(200, nodeCount * 30);
-      const angle = (2 * Math.PI * parseInt(state.id.replace(/\D/g, ''))) / nodeCount;
-      const x = radius * Math.cos(angle) + 300;
-      const y = radius * Math.sin(angle) + 200;
+      const width = Math.max(800, nodeCount * 120);
+      const horizontalSpace = width / (nodeCount + 1);
+      
+      // Get an approximation of how "deep" this node is in the automaton
+      // Start state is leftmost (depth 0)
+      // Accept states are rightmost (maximum depth)
+      let depth = 0;
+      if (state.isStart) {
+        depth = 0;
+      } else if (state.isAccept) {
+        depth = nodeCount - 1;
+      } else {
+        // Try to estimate depth based on node ID number
+        const idNum = parseInt(state.id.replace(/\D/g, '')) || 0;
+        depth = Math.min(Math.max(1, idNum), nodeCount - 2);
+      }
+      
+      const x = 100 + (depth * horizontalSpace);
+      // Offset y position slightly based on node ID to avoid direct overlaps
+      const yOffset = (parseInt(state.id.replace(/\D/g, '')) % 3) * 100;
+      const y = 200 + yOffset;
 
       return {
         id: state.id,
@@ -58,10 +77,13 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
-    // Create edges
+    // Create edges with directional arrows
     const graphEdges: Edge[] = automaton.transitions.map((transition) => {
+      // Style edges based on symbol type (epsilon vs. character)
+      const isEpsilon = transition.symbol === 'ε';
+      
       const edgeStyle = {
-        stroke: '#6E59A5',
+        stroke: isEpsilon ? '#9E86ED' : '#6E59A5',
         strokeWidth: 1.5,
       };
 
@@ -72,11 +94,76 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         target: transition.to,
         label: transition.symbol,
         style: edgeStyle,
-        animated: false,
-        labelStyle: { fill: '#333', fontSize: 12 },
+        animated: isEpsilon, // animate epsilon transitions
+        labelStyle: { 
+          fill: '#333', 
+          fontSize: 12,
+          fontWeight: isEpsilon ? 'normal' : 'bold',
+        },
         labelBgStyle: { fill: '#F1F0FB' },
+        // Add directional arrowhead marker to all transitions
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: isEpsilon ? '#9E86ED' : '#6E59A5',
+          width: 15,
+          height: 15,
+        },
+        // Use smoother edges for better visualization
+        type: 'smoothstep',
       };
     });
+
+    // Add a "Start" indicator arrow for the start state
+    const startState = automaton.states.find(s => s.isStart);
+    if (startState) {
+      const startArrowId = 'start-arrow';
+      const startNode = graphNodes.find(n => n.id === startState.id);
+      
+      if (startNode) {
+        // Create virtual start node (invisible) to add the start arrow
+        graphNodes.push({
+          id: startArrowId,
+          type: 'default',
+          data: { label: '' },
+          position: { 
+            x: startNode.position.x - 100, 
+            y: startNode.position.y 
+          },
+          style: { 
+            opacity: 0, // invisible node
+            width: 1,
+            height: 1,
+          },
+          selectable: false,
+          draggable: false,
+        });
+        
+        // Add start arrow edge
+        graphEdges.push({
+          id: 'e-start',
+          source: startArrowId,
+          target: startState.id,
+          label: 'Start',
+          style: {
+            stroke: '#0EA5E9',
+            strokeWidth: 2,
+          },
+          labelStyle: { 
+            fill: '#0EA5E9', 
+            fontSize: 12,
+            fontWeight: 'bold',
+          },
+          labelBgStyle: { fill: '#F1F0FB' },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#0EA5E9',
+            width: 15,
+            height: 15,
+          },
+          type: 'smoothstep',
+        });
+      }
+    }
 
     // Highlight path if test result is provided
     if (testResult && testResult.path.length > 0) {
@@ -85,9 +172,9 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         if (testResult.path.includes(node.id)) {
           node.style = {
             ...node.style,
-            boxShadow: '0 0 10px rgba(110, 89, 165, 0.5)',
+            boxShadow: `0 0 10px ${testResult.accepted ? 'rgba(74, 222, 128, 0.8)' : 'rgba(248, 113, 113, 0.8)'}`,
             borderColor: testResult.accepted ? '#4ade80' : '#f87171',
-            borderWidth: 2,
+            borderWidth: 3,
           };
         }
       });
@@ -103,7 +190,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             edge.style = {
               ...edge.style,
               stroke: testResult.accepted ? '#4ade80' : '#f87171',
-              strokeWidth: 2,
+              strokeWidth: 2.5,
             };
           }
         });
@@ -134,7 +221,13 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             >
               <Background color="#f8f8f8" gap={16} />
               <Controls />
-              <MiniMap />
+              <MiniMap 
+                nodeColor={(node) => {
+                  if (node.data?.isStart) return '#D3E4FD';
+                  if (node.data?.isAccept) return '#F2FCE2';
+                  return '#ffffff';
+                }}
+              />
             </ReactFlow>
           </div>
         ) : (
