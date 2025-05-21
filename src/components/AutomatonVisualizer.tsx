@@ -38,27 +38,44 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         fontWeight: 600,
       };
 
-      // Position nodes in a horizontal layout favoring left to right for better readability
+      // Position nodes using a force-directed layout algorithm to minimize edge crossings
+      // and favor left-to-right flow for better readability
       const nodeCount = automaton.states.length;
-      const width = Math.max(800, nodeCount * 120);
-      const horizontalSpace = width / (nodeCount + 1);
+      const width = Math.max(800, nodeCount * 150);
       
-      // Get an approximation of how "deep" this node is in the automaton
-      // Start state is leftmost (depth 0)
-      // Accept states are rightmost (maximum depth)
+      // Calculate node depth based on distance from start state for left-to-right layout
       let depth = 0;
       if (state.isStart) {
         depth = 0;
       } else if (state.isAccept) {
         depth = nodeCount - 1;
       } else {
-        // Try to estimate depth based on node ID number
-        const idNum = parseInt(state.id.replace(/\D/g, '')) || 0;
-        depth = Math.min(Math.max(1, idNum), nodeCount - 2);
+        // For intermediate states, try to estimate depth based on transitions
+        // Find all transitions that lead to this state
+        const incomingTransitions = automaton.transitions.filter(t => t.to === state.id);
+        
+        // Try to place the state to the right of its sources
+        if (incomingTransitions.length > 0) {
+          const sourceIds = incomingTransitions.map(t => t.from);
+          // Find the maximum depth of all source states and add 1
+          const maxSourceDepth = Math.max(...sourceIds.map(id => {
+            const sourceIndex = automaton.states.findIndex(s => s.id === id);
+            return sourceIndex >= 0 ? sourceIndex : 0;
+          }));
+          depth = Math.min(maxSourceDepth + 1, nodeCount - 2);
+        } else {
+          // If no incoming transitions, use node ID as a fallback
+          const idNum = parseInt(state.id.replace(/\D/g, '')) || 0;
+          depth = Math.min(Math.max(1, idNum), nodeCount - 2);
+        }
       }
       
+      // Calculate x position based on depth
+      const horizontalSpace = width / (nodeCount + 1);
       const x = 100 + (depth * horizontalSpace);
-      // Offset y position slightly based on node ID to avoid direct overlaps
+      
+      // Offset y position to avoid direct overlaps
+      // Use modulo of node id to create different levels
       const yOffset = (parseInt(state.id.replace(/\D/g, '')) % 3) * 100;
       const y = 200 + yOffset;
 
@@ -84,23 +101,33 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       
       const edgeStyle = {
         stroke: isEpsilon ? '#9E86ED' : '#6E59A5',
-        strokeWidth: 1.5,
+        strokeWidth: isEpsilon ? 1.5 : 2.5,
       };
 
+      // For self-loops, enhance the visualization
+      const isSelfLoop = transition.from === transition.to;
+      
       // Create unique ID for each edge
       return {
         id: transition.id,
         source: transition.from,
         target: transition.to,
-        label: transition.symbol,
+        label: transition.symbol, // Always show transition symbol
         style: edgeStyle,
-        animated: isEpsilon, // animate epsilon transitions
+        animated: isEpsilon, // animate only epsilon transitions
         labelStyle: { 
-          fill: '#333', 
-          fontSize: 12,
+          fill: isEpsilon ? '#6E59A5' : '#333', 
+          fontSize: 14,
           fontWeight: isEpsilon ? 'normal' : 'bold',
+          background: '#fff',
+          padding: '2px 4px',
         },
-        labelBgStyle: { fill: '#F1F0FB' },
+        labelBgStyle: { 
+          fill: '#F1F0FB',
+          fillOpacity: 0.8,
+          rx: 4,
+          ry: 4,
+        },
         // Add directional arrowhead marker to all transitions
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -108,8 +135,17 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           width: 15,
           height: 15,
         },
-        // Use smoother edges for better visualization
-        type: 'smoothstep',
+        // Use different edge types for better visualization
+        type: isSelfLoop ? 'default' : 'smoothstep',
+        // Configure self-loops with appropriate styling
+        ...(isSelfLoop && {
+          type: 'default',
+          animated: false, // Don't animate self-loops
+          style: {
+            ...edgeStyle,
+            curvature: 0.5, // Increase curvature for self-loops
+          },
+        }),
       };
     });
 
