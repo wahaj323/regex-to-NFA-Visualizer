@@ -38,44 +38,27 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         fontWeight: 600,
       };
 
-      // Position nodes using a force-directed layout algorithm to minimize edge crossings
-      // and favor left-to-right flow for better readability
+      // Position nodes in a horizontal layout favoring left to right for better readability
       const nodeCount = automaton.states.length;
-      const width = Math.max(800, nodeCount * 150);
+      const width = Math.max(800, nodeCount * 120);
+      const horizontalSpace = width / (nodeCount + 1);
       
-      // Calculate node depth based on distance from start state for left-to-right layout
+      // Get an approximation of how "deep" this node is in the automaton
+      // Start state is leftmost (depth 0)
+      // Accept states are rightmost (maximum depth)
       let depth = 0;
       if (state.isStart) {
         depth = 0;
       } else if (state.isAccept) {
         depth = nodeCount - 1;
       } else {
-        // For intermediate states, try to estimate depth based on transitions
-        // Find all transitions that lead to this state
-        const incomingTransitions = automaton.transitions.filter(t => t.to === state.id);
-        
-        // Try to place the state to the right of its sources
-        if (incomingTransitions.length > 0) {
-          const sourceIds = incomingTransitions.map(t => t.from);
-          // Find the maximum depth of all source states and add 1
-          const maxSourceDepth = Math.max(...sourceIds.map(id => {
-            const sourceIndex = automaton.states.findIndex(s => s.id === id);
-            return sourceIndex >= 0 ? sourceIndex : 0;
-          }));
-          depth = Math.min(maxSourceDepth + 1, nodeCount - 2);
-        } else {
-          // If no incoming transitions, use node ID as a fallback
-          const idNum = parseInt(state.id.replace(/\D/g, '')) || 0;
-          depth = Math.min(Math.max(1, idNum), nodeCount - 2);
-        }
+        // Try to estimate depth based on node ID number
+        const idNum = parseInt(state.id.replace(/\D/g, '')) || 0;
+        depth = Math.min(Math.max(1, idNum), nodeCount - 2);
       }
       
-      // Calculate x position based on depth
-      const horizontalSpace = width / (nodeCount + 1);
       const x = 100 + (depth * horizontalSpace);
-      
-      // Offset y position to avoid direct overlaps
-      // Use modulo of node id to create different levels
+      // Offset y position slightly based on node ID to avoid direct overlaps
       const yOffset = (parseInt(state.id.replace(/\D/g, '')) % 3) * 100;
       const y = 200 + yOffset;
 
@@ -94,68 +77,39 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
-    // Create edges with directional arrows - enhanced to better display character transitions
+    // Create edges with directional arrows
     const graphEdges: Edge[] = automaton.transitions.map((transition) => {
       // Style edges based on symbol type (epsilon vs. character)
       const isEpsilon = transition.symbol === 'ε';
       
-      // Create distinct styling for character vs epsilon transitions
       const edgeStyle = {
-        stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
-        strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
-        strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
+        stroke: isEpsilon ? '#9E86ED' : '#6E59A5',
+        strokeWidth: 1.5,
       };
 
-      // For self-loops, enhance the visualization
-      const isSelfLoop = transition.from === transition.to;
-      
       // Create unique ID for each edge
       return {
         id: transition.id,
         source: transition.from,
         target: transition.to,
-        label: transition.symbol, // Always show transition symbol
+        label: transition.symbol,
         style: edgeStyle,
-        animated: isEpsilon, // animate only epsilon transitions
+        animated: isEpsilon, // animate epsilon transitions
         labelStyle: { 
-          fill: isEpsilon ? '#6E59A5' : '#333', 
-          fontSize: isEpsilon ? 13 : 16, // Larger font for character transitions
+          fill: '#333', 
+          fontSize: 12,
           fontWeight: isEpsilon ? 'normal' : 'bold',
-          background: '#fff',
-          padding: '3px 6px',
         },
-        labelBgStyle: { 
-          fill: '#F1F0FB',
-          fillOpacity: 0.9, // Increased opacity for better visibility
-          rx: 8,
-          ry: 8,
-        },
+        labelBgStyle: { fill: '#F1F0FB' },
         // Add directional arrowhead marker to all transitions
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: isEpsilon ? '#9E86ED' : '#F97316', // Match edge color
-          width: isEpsilon ? 12 : 18, // Larger arrowhead for character transitions
-          height: isEpsilon ? 12 : 18,
+          color: isEpsilon ? '#9E86ED' : '#6E59A5',
+          width: 15,
+          height: 15,
         },
-        // Use different edge types for better visualization
-        type: 'default', // Default for all edges, then customize below
-        // Configure self-loops with appropriate styling
-        ...(isSelfLoop && {
-          type: 'default',
-          animated: false, // Don't animate self-loops
-          style: {
-            ...edgeStyle,
-            curvature: 0.8, // Increase curvature for self-loops for better visibility
-          },
-          // Add specific settings for self-loops
-          sourceHandle: null,
-          targetHandle: null,
-        }),
-        // Configure regular transitions
-        ...(!isSelfLoop && {
-          type: 'smoothstep',
-          curvature: 0.3,
-        }),
+        // Use smoother edges for better visualization
+        type: 'smoothstep',
       };
     });
 
@@ -196,7 +150,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           },
           labelStyle: { 
             fill: '#0EA5E9', 
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: 'bold',
           },
           labelBgStyle: { fill: '#F1F0FB' },
@@ -242,9 +196,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         });
       }
     }
-
-    // Debug transitions
-    console.log('Transitions:', automaton.transitions);
 
     setNodes(graphNodes);
     setEdges(graphEdges);
