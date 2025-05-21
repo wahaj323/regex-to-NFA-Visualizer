@@ -6,6 +6,7 @@ import RegexInput from "@/components/RegexInput";
 import AutomatonVisualizer from "@/components/AutomatonVisualizer";
 import TestStringChecker from "@/components/TestStringChecker";
 import { toast } from "@/components/ui/use-toast";
+import { Check, X } from "lucide-react"; // Added this import for the icons
 
 const Index = () => {
   const [automaton, setAutomaton] = useState<Automaton | null>(null);
