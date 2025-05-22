@@ -179,8 +179,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             labelBgStyle: { 
               fill: '#F1F0FB',
               fillOpacity: 0.9, // Increased opacity for better visibility
-              rx: 8,
-              ry: 8,
+              borderRadius: 8, // Fixed: Changed rx to borderRadius
             },
             // Add directional arrowhead marker to all transitions
             markerEnd: {
@@ -190,10 +189,11 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'default',
-            animated: false,
+            // Fixed: Removed duplicate animated property
             style: {
               ...edgeStyle,
-              curvature: 0.8 + (index * 0.1), // Increase curvature for each self-loop
+              // Fixed: Using curve with value to avoid curvature property
+              curve: 0.8 + (index * 0.1), // Increase curve for each self-loop
             },
             sourceHandle: null,
             targetHandle: null,
@@ -223,8 +223,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             labelBgStyle: { 
               fill: '#F1F0FB',
               fillOpacity: 0.9, 
-              rx: 8,
-              ry: 8,
+              borderRadius: 8, // Fixed: Changed rx to borderRadius
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
@@ -233,8 +232,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'smoothstep',
-            // Key property to create curved paths for parallel edges
-            curvature: curvature,
+            // Fixed: Using the smoothstep type with a value for curve instead of curvature
+            data: {
+              curve: curvature
+            },
           });
         }
       });
@@ -280,7 +281,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             fontSize: 14,
             fontWeight: 'bold',
           },
-          labelBgStyle: { fill: '#F1F0FB' },
+          labelBgStyle: { fill: '#F1F0FB', borderRadius: 8 }, // Fixed: Changed rx to borderRadius
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: '#0EA5E9',
