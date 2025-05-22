@@ -18,8 +18,17 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
   useEffect(() => {
     if (!automaton) return;
 
-    // Create nodes
-    const graphNodes: Node[] = automaton.states.map((state) => {
+    // FIRST FIX: Rename states to q0, q1, q2, ...
+    // Create a mapping of old state IDs to new q-format IDs
+    const stateIdMap = new Map();
+    automaton.states.forEach((state, index) => {
+      stateIdMap.set(state.id, `q${index}`);
+    });
+
+    // Create nodes with renamed state IDs
+    const graphNodes: Node[] = automaton.states.map((state, index) => {
+      const newStateId = stateIdMap.get(state.id);
+      
       // Calculate node styles based on state type (start, accept)
       const nodeStyle = {
         background: state.isAccept ? '#F2FCE2' : state.isStart ? '#D3E4FD' : '#FFFFFF',
@@ -76,14 +85,14 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       
       // Offset y position to avoid direct overlaps
       // Use modulo of node id to create different levels
-      const yOffset = (parseInt(state.id.replace(/\D/g, '')) % 3) * 100;
+      const yOffset = (index % 3) * 100; // Using index instead of state.id for consistent layout
       const y = 200 + yOffset;
 
       return {
-        id: state.id,
+        id: newStateId, // Use the new q-format ID
         type: 'default',
         data: { 
-          label: state.label,
+          label: newStateId, // Display the state as q0, q1, etc.
           isStart: state.isStart,
           isAccept: state.isAccept,
         },
@@ -94,16 +103,27 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
+    // SECOND FIX: Handle parallel transitions better
     // Track parallel edges to handle multiple transitions between the same nodes
     const parallelEdgesMap = new Map();
 
     // First pass: Identify parallel edges (same source and target)
     automaton.transitions.forEach((transition) => {
-      const edgeKey = `${transition.from}-${transition.to}`;
+      const sourceId = stateIdMap.get(transition.from);
+      const targetId = stateIdMap.get(transition.to);
+      const edgeKey = `${sourceId}-${targetId}`;
+      
       if (!parallelEdgesMap.has(edgeKey)) {
         parallelEdgesMap.set(edgeKey, []);
       }
-      parallelEdgesMap.get(edgeKey).push(transition);
+      
+      // Store the transition with the new source/target IDs
+      parallelEdgesMap.get(edgeKey).push({
+        ...transition,
+        from: sourceId,
+        to: targetId,
+        id: `${sourceId}-${targetId}-${transition.symbol}` // Update edge ID to use new state IDs
+      });
     });
 
     // Create edges with directional arrows - enhanced to better display character transitions
@@ -112,10 +132,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
     // Second pass: Create edges with proper offsets for parallel edges
     parallelEdgesMap.forEach((transitions, edgeKey) => {
       // Sort transitions by symbol type to ensure consistent rendering
-      // Character transitions first, then epsilon
+      // Epsilon transitions first, then character transitions for better z-ordering
       transitions.sort((a, b) => {
-        if (a.symbol === 'ε' && b.symbol !== 'ε') return 1;
-        if (a.symbol !== 'ε' && b.symbol === 'ε') return -1;
+        if (a.symbol === 'ε' && b.symbol !== 'ε') return -1; // Show epsilon BELOW character transitions
+        if (a.symbol !== 'ε' && b.symbol === 'ε') return 1;
         return a.symbol.localeCompare(b.symbol);
       });
       
@@ -131,6 +151,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
           strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
           strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
+          zIndex: isEpsilon ? 0 : 10 + index, // Higher z-index for character transitions to ensure visibility
         };
 
         // For self-loops, enhance the visualization
@@ -144,19 +165,24 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           // For multiple edges between same nodes, increase curvature and alternate direction
           // Distribute curvature evenly among parallel transitions
           const baseCurvature = 0.2;
-          const curvatureStep = 0.2;
-          const alternateDirection = index % 2 === 0 ? 1 : -1; // Alternate curve direction
-          const offsetIndex = Math.ceil((index + 1) / 2); // 0,1,2,3 -> 1,1,2,2
+          const curvatureStep = 0.15; // Increased step for better separation
+          
+          // Alternate curve direction: even indices above, odd indices below
+          const alternateDirection = index % 2 === 0 ? 1 : -1; 
+          
+          // Spread multiple transitions more evenly
+          const offsetIndex = Math.floor((index + 1) / 2); // 0,1,2,3 -> 0,1,1,2
           
           curvature = baseCurvature + (offsetIndex * curvatureStep);
           curvature *= alternateDirection;
           
-          // Position label offset based on curve direction
-          labelOffset = alternateDirection * (10 * offsetIndex);
+          // Position label offset to avoid overlap - move along the curve
+          // Increase offset for more transitions
+          labelOffset = alternateDirection * (15 * (offsetIndex + 1));
         }
         
         // For self-loops with multiple transitions, vary the angle
-        if (isSelfLoop && transitionCount > 1) {
+        if (isSelfLoop) {
           // Calculate different angles for self-loops based on index
           const baseLoopDistance = 80;
           const angleOffset = (index * 45) % 360; // Distribute around the circle
@@ -179,7 +205,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             labelBgStyle: { 
               fill: '#F1F0FB',
               fillOpacity: 0.9, // Increased opacity for better visibility
-              borderRadius: 8, // Fixed: Changed rx to borderRadius
+              borderRadius: 8, 
             },
             // Add directional arrowhead marker to all transitions
             markerEnd: {
@@ -189,7 +215,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'default',
-            // Fixed: Use a single style property with merged styles
             data: {
               loopAngle: angleOffset,
               loopDistance: baseLoopDistance + (index * 10),
@@ -215,7 +240,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             labelBgStyle: { 
               fill: '#F1F0FB',
               fillOpacity: 0.9, 
-              borderRadius: 8, // Fixed: Changed rx to borderRadius
+              borderRadius: 8,
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
@@ -224,7 +249,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'smoothstep',
-            // Fixed: Move curve property to data object
             data: {
               curve: curvature
             },
@@ -237,7 +261,8 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
     const startState = automaton.states.find(s => s.isStart);
     if (startState) {
       const startArrowId = 'start-arrow';
-      const startNode = graphNodes.find(n => n.id === startState.id);
+      const startNodeId = stateIdMap.get(startState.id);
+      const startNode = graphNodes.find(n => n.id === startNodeId);
       
       if (startNode) {
         // Create virtual start node (invisible) to add the start arrow
@@ -262,7 +287,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         graphEdges.push({
           id: 'e-start',
           source: startArrowId,
-          target: startState.id,
+          target: startNodeId,
           label: 'Start',
           style: {
             stroke: '#0EA5E9',
@@ -273,7 +298,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
             fontSize: 14,
             fontWeight: 'bold',
           },
-          labelBgStyle: { fill: '#F1F0FB', borderRadius: 8 }, // Fixed: Changed rx to borderRadius
+          labelBgStyle: { fill: '#F1F0FB', borderRadius: 8 },
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: '#0EA5E9',
@@ -287,9 +312,12 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
 
     // Highlight path if test result is provided
     if (testResult && testResult.path.length > 0) {
+      // Map old state IDs in the path to new q-format IDs
+      const mappedPath = testResult.path.map(oldId => stateIdMap.get(oldId) || oldId);
+      
       // Highlight nodes in the path
       graphNodes.forEach((node) => {
-        if (testResult.path.includes(node.id)) {
+        if (mappedPath.includes(node.id)) {
           node.style = {
             ...node.style,
             boxShadow: `0 0 10px ${testResult.accepted ? 'rgba(74, 222, 128, 0.8)' : 'rgba(248, 113, 113, 0.8)'}`,
@@ -300,9 +328,9 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       });
 
       // Highlight edges in the path
-      for (let i = 0; i < testResult.path.length - 1; i++) {
-        const source = testResult.path[i];
-        const target = testResult.path[i + 1];
+      for (let i = 0; i < mappedPath.length - 1; i++) {
+        const source = mappedPath[i];
+        const target = mappedPath[i + 1];
         
         graphEdges.forEach((edge) => {
           if (edge.source === source && edge.target === target) {
@@ -318,6 +346,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
     }
 
     // Debug transitions and edge creation
+    console.log('State ID Map:', Array.from(stateIdMap.entries()));
     console.log('Transitions:', automaton.transitions);
     console.log('Parallel edges:', Array.from(parallelEdgesMap.entries()));
     console.log('Generated edges:', graphEdges);
@@ -366,4 +395,3 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
 };
 
 export default AutomatonVisualizer;
-
