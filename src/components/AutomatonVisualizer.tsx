@@ -189,17 +189,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'default',
-            // Fixed: Merged style properties
-            style: {
-              ...edgeStyle,
-            },
-            sourceHandle: null,
-            targetHandle: null,
-            // Control loop positioning for self-loops
+            // Fixed: Use a single style property with merged styles
             data: {
               loopAngle: angleOffset,
               loopDistance: baseLoopDistance + (index * 10),
-              curve: 0.8 + (index * 0.1) // Fixed: Added curve property to data object
             }
           });
         } else if (!isSelfLoop) {
@@ -231,7 +224,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
               height: isEpsilon ? 12 : 18,
             },
             type: 'smoothstep',
-            // Fixed: Using data property for curve instead of direct curvature
+            // Fixed: Move curve property to data object
             data: {
               curve: curvature
             },
@@ -373,3 +366,4 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
 };
 
 export default AutomatonVisualizer;
+
