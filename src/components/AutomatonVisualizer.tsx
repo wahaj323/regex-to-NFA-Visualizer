@@ -10,6 +10,119 @@ interface AutomatonVisualizerProps {
   testResult: TestResult | null;
 }
 
+// Helper function to create an edge with proper styling and positioning
+const makeEdge = (
+  transitionId: string, 
+  sourceId: string, 
+  targetId: string, 
+  symbol: string, 
+  isSelfLoop: boolean,
+  parallelIndex: number, 
+  totalParallel: number,
+  isHighlighted: boolean = false,
+  highlightColor: string = '#4ade80'
+): Edge => {
+  const isEpsilon = symbol === 'ε';
+  
+  // Create distinct styling for character vs epsilon transitions
+  const edgeStyle = {
+    stroke: isHighlighted ? highlightColor : (isEpsilon ? '#9E86ED' : '#F97316'),
+    strokeWidth: isEpsilon ? 1.5 : 3,
+    strokeDasharray: isEpsilon ? '5,5' : 'none',
+    zIndex: isEpsilon ? 0 : 10 + parallelIndex, // Higher z-index for character transitions
+  };
+
+  let curvature = 0.3; // Default curvature
+  let labelOffset = 0;
+  
+  if (isSelfLoop) {
+    // For self-loops with multiple transitions, vary the angle
+    const baseLoopDistance = 80;
+    const angleOffset = (parallelIndex * 45) % 360; // Distribute around the circle
+    
+    return {
+      id: transitionId,
+      source: sourceId,
+      target: targetId,
+      label: symbol,
+      style: edgeStyle,
+      animated: isHighlighted || isEpsilon,
+      labelStyle: { 
+        fill: isEpsilon ? '#6E59A5' : '#333', 
+        fontSize: isEpsilon ? 13 : 16,
+        fontWeight: isEpsilon ? 'normal' : 'bold',
+        background: '#fff',
+        padding: '3px 6px',
+      },
+      labelBgStyle: { 
+        fill: '#F1F0FB',
+        fillOpacity: 0.9,
+        borderRadius: 8, 
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: isHighlighted ? highlightColor : (isEpsilon ? '#9E86ED' : '#F97316'),
+        width: isEpsilon ? 12 : 18,
+        height: isEpsilon ? 12 : 18,
+      },
+      type: 'default',
+      data: {
+        loopAngle: angleOffset,
+        loopDistance: baseLoopDistance + (parallelIndex * 10),
+      }
+    };
+  } else {
+    // For regular transitions between different nodes
+    if (totalParallel > 1) {
+      // For multiple edges between same nodes, increase curvature and alternate direction
+      const baseCurvature = 0.2;
+      const curvatureStep = 0.15;
+      
+      // Alternate curve direction: even indices above, odd indices below
+      const alternateDirection = parallelIndex % 2 === 0 ? 1 : -1; 
+      
+      // Spread multiple transitions more evenly
+      const offsetIndex = Math.floor((parallelIndex + 1) / 2);
+      
+      curvature = baseCurvature + (offsetIndex * curvatureStep);
+      curvature *= alternateDirection;
+      
+      // Position label offset to avoid overlap
+      labelOffset = alternateDirection * (15 * (offsetIndex + 1));
+    }
+    
+    return {
+      id: transitionId,
+      source: sourceId,
+      target: targetId,
+      label: symbol,
+      style: edgeStyle,
+      animated: isHighlighted || isEpsilon,
+      labelStyle: { 
+        fill: isEpsilon ? '#6E59A5' : '#333', 
+        fontSize: isEpsilon ? 13 : 16,
+        fontWeight: isEpsilon ? 'normal' : 'bold',
+        background: '#fff',
+        padding: '3px 6px',
+        transform: `translateY(${labelOffset}px)`,
+      },
+      labelBgStyle: { 
+        fill: '#F1F0FB',
+        fillOpacity: 0.9,
+        borderRadius: 8,
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: isHighlighted ? highlightColor : (isEpsilon ? '#9E86ED' : '#F97316'),
+        width: isEpsilon ? 12 : 18,
+        height: isEpsilon ? 12 : 18,
+      },
+      type: 'smoothstep',
+      data: { curve: curvature }
+    };
+  }
+};
+
 const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -18,7 +131,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
   useEffect(() => {
     if (!automaton) return;
 
-    // FIRST FIX: Rename states to q0, q1, q2, ...
     // Create a mapping of old state IDs to new q-format IDs
     const stateIdMap = new Map();
     automaton.states.forEach((state, index) => {
@@ -34,7 +146,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         background: state.isAccept ? '#F2FCE2' : state.isStart ? '#D3E4FD' : '#FFFFFF',
         borderColor: state.isAccept ? '#4ade80' : state.isStart ? '#0EA5E9' : '#6E59A5',
         borderWidth: state.isAccept ? 3 : state.isStart ? 2 : 1,
-        // Double border for accept states
         boxShadow: state.isAccept ? '0 0 0 2px white, 0 0 0 4px #4ade80' : state.isStart ? '0 0 5px rgba(14, 165, 233, 0.5)' : 'none',
         borderStyle: 'solid',
         padding: '10px',
@@ -84,15 +195,14 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       const x = 100 + (depth * horizontalSpace);
       
       // Offset y position to avoid direct overlaps
-      // Use modulo of node id to create different levels
-      const yOffset = (index % 3) * 100; // Using index instead of state.id for consistent layout
+      const yOffset = (index % 3) * 100;
       const y = 200 + yOffset;
 
       return {
-        id: newStateId, // Use the new q-format ID
+        id: newStateId,
         type: 'default',
         data: { 
-          label: newStateId, // Display the state as q0, q1, etc.
+          label: newStateId,
           isStart: state.isStart,
           isAccept: state.isAccept,
         },
@@ -103,7 +213,6 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
-    // SECOND FIX: Handle parallel transitions better
     // Track parallel edges to handle multiple transitions between the same nodes
     const parallelEdgesMap = new Map();
 
@@ -122,7 +231,7 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
         ...transition,
         from: sourceId,
         to: targetId,
-        id: `${sourceId}-${targetId}-${transition.symbol}` // Update edge ID to use new state IDs
+        id: `${sourceId}-${targetId}-${transition.symbol}`
       });
     });
 
@@ -131,129 +240,55 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
     
     // Second pass: Create edges with proper offsets for parallel edges
     parallelEdgesMap.forEach((transitions, edgeKey) => {
-      // Sort transitions by symbol type to ensure consistent rendering
+      // Sort transitions to ensure consistent rendering
       // Epsilon transitions first, then character transitions for better z-ordering
       transitions.sort((a, b) => {
-        if (a.symbol === 'ε' && b.symbol !== 'ε') return -1; // Show epsilon BELOW character transitions
+        if (a.symbol === 'ε' && b.symbol !== 'ε') return -1; // Epsilon below
         if (a.symbol !== 'ε' && b.symbol === 'ε') return 1;
         return a.symbol.localeCompare(b.symbol);
       });
       
-      // Calculate curvature based on number of parallel edges
       const transitionCount = transitions.length;
       
       transitions.forEach((transition, index) => {
-        // Style edges based on symbol type (epsilon vs. character)
-        const isEpsilon = transition.symbol === 'ε';
-        
-        // Create distinct styling for character vs epsilon transitions
-        const edgeStyle = {
-          stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
-          strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
-          strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
-          zIndex: isEpsilon ? 0 : 10 + index, // Higher z-index for character transitions to ensure visibility
-        };
-
-        // For self-loops, enhance the visualization
+        // Determine if this is a self-loop
         const isSelfLoop = transition.from === transition.to;
         
-        // Calculate offset for parallel edges
-        let curvature = 0.3; // Default curvature
-        let labelOffset = 0;
+        // Check if this transition is part of the highlighted test path
+        let isHighlighted = false;
+        let highlightColor = '#4ade80'; // default green for accepted
         
-        if (transitionCount > 1 && !isSelfLoop) {
-          // For multiple edges between same nodes, increase curvature and alternate direction
-          // Distribute curvature evenly among parallel transitions
-          const baseCurvature = 0.2;
-          const curvatureStep = 0.15; // Increased step for better separation
+        if (testResult && testResult.path.length > 0) {
+          // Map old state IDs in the path to new q-format IDs
+          const mappedPath = testResult.path.map(oldId => stateIdMap.get(oldId) || oldId);
           
-          // Alternate curve direction: even indices above, odd indices below
-          const alternateDirection = index % 2 === 0 ? 1 : -1; 
-          
-          // Spread multiple transitions more evenly
-          const offsetIndex = Math.floor((index + 1) / 2); // 0,1,2,3 -> 0,1,1,2
-          
-          curvature = baseCurvature + (offsetIndex * curvatureStep);
-          curvature *= alternateDirection;
-          
-          // Position label offset to avoid overlap - move along the curve
-          // Increase offset for more transitions
-          labelOffset = alternateDirection * (15 * (offsetIndex + 1));
-        }
-        
-        // For self-loops with multiple transitions, vary the angle
-        if (isSelfLoop) {
-          // Calculate different angles for self-loops based on index
-          const baseLoopDistance = 80;
-          const angleOffset = (index * 45) % 360; // Distribute around the circle
-          
-          // Create unique ID for each edge
-          graphEdges.push({
-            id: transition.id,
-            source: transition.from,
-            target: transition.to,
-            label: transition.symbol,
-            style: edgeStyle,
-            animated: isEpsilon,
-            labelStyle: { 
-              fill: isEpsilon ? '#6E59A5' : '#333', 
-              fontSize: isEpsilon ? 13 : 16, // Larger font for character transitions
-              fontWeight: isEpsilon ? 'normal' : 'bold',
-              background: '#fff',
-              padding: '3px 6px',
-            },
-            labelBgStyle: { 
-              fill: '#F1F0FB',
-              fillOpacity: 0.9, // Increased opacity for better visibility
-              borderRadius: 8, 
-            },
-            // Add directional arrowhead marker to all transitions
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: isEpsilon ? '#9E86ED' : '#F97316', // Match edge color
-              width: isEpsilon ? 12 : 18, // Larger arrowhead for character transitions
-              height: isEpsilon ? 12 : 18,
-            },
-            type: 'default',
-            data: {
-              loopAngle: angleOffset,
-              loopDistance: baseLoopDistance + (index * 10),
+          // Check if this transition is part of the highlighted path
+          for (let i = 0; i < mappedPath.length - 1; i++) {
+            const pathSource = mappedPath[i];
+            const pathTarget = mappedPath[i + 1];
+            
+            if (transition.from === pathSource && transition.to === pathTarget) {
+              isHighlighted = true;
+              highlightColor = testResult.accepted ? '#4ade80' : '#f87171';
+              break;
             }
-          });
-        } else if (!isSelfLoop) {
-          // For regular edges between different nodes
-          graphEdges.push({
-            id: transition.id,
-            source: transition.from,
-            target: transition.to,
-            label: transition.symbol,
-            style: edgeStyle,
-            animated: isEpsilon,
-            labelStyle: { 
-              fill: isEpsilon ? '#6E59A5' : '#333', 
-              fontSize: isEpsilon ? 13 : 16,
-              fontWeight: isEpsilon ? 'normal' : 'bold',
-              background: '#fff',
-              padding: '3px 6px',
-              transform: `translateY(${labelOffset}px)`, // Offset labels for parallel edges
-            },
-            labelBgStyle: { 
-              fill: '#F1F0FB',
-              fillOpacity: 0.9, 
-              borderRadius: 8,
-            },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: isEpsilon ? '#9E86ED' : '#F97316',
-              width: isEpsilon ? 12 : 18,
-              height: isEpsilon ? 12 : 18,
-            },
-            type: 'smoothstep',
-            data: {
-              curve: curvature
-            },
-          });
+          }
         }
+        
+        // Create the edge using our helper function
+        const edge = makeEdge(
+          transition.id,
+          transition.from,
+          transition.to,
+          transition.symbol,
+          isSelfLoop,
+          index,
+          transitionCount,
+          isHighlighted,
+          highlightColor
+        );
+        
+        graphEdges.push(edge);
       });
     });
 
@@ -326,29 +361,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
           };
         }
       });
-
-      // Highlight edges in the path
-      for (let i = 0; i < mappedPath.length - 1; i++) {
-        const source = mappedPath[i];
-        const target = mappedPath[i + 1];
-        
-        graphEdges.forEach((edge) => {
-          if (edge.source === source && edge.target === target) {
-            edge.animated = true;
-            edge.style = {
-              ...edge.style,
-              stroke: testResult.accepted ? '#4ade80' : '#f87171',
-              strokeWidth: 2.5,
-            };
-          }
-        });
-      }
     }
 
-    // Debug transitions and edge creation
+    // Debug output for development
     console.log('State ID Map:', Array.from(stateIdMap.entries()));
-    console.log('Transitions:', automaton.transitions);
-    console.log('Parallel edges:', Array.from(parallelEdgesMap.entries()));
     console.log('Generated edges:', graphEdges);
 
     setNodes(graphNodes);
