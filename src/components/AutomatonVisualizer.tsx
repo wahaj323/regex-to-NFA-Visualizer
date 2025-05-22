@@ -94,69 +94,150 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       };
     });
 
-    // Create edges with directional arrows - enhanced to better display character transitions
-    const graphEdges: Edge[] = automaton.transitions.map((transition) => {
-      // Style edges based on symbol type (epsilon vs. character)
-      const isEpsilon = transition.symbol === 'ε';
-      
-      // Create distinct styling for character vs epsilon transitions
-      const edgeStyle = {
-        stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
-        strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
-        strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
-      };
+    // Track parallel edges to handle multiple transitions between the same nodes
+    const parallelEdgesMap = new Map();
 
-      // For self-loops, enhance the visualization
-      const isSelfLoop = transition.from === transition.to;
+    // First pass: Identify parallel edges (same source and target)
+    automaton.transitions.forEach((transition) => {
+      const edgeKey = `${transition.from}-${transition.to}`;
+      if (!parallelEdgesMap.has(edgeKey)) {
+        parallelEdgesMap.set(edgeKey, []);
+      }
+      parallelEdgesMap.get(edgeKey).push(transition);
+    });
+
+    // Create edges with directional arrows - enhanced to better display character transitions
+    const graphEdges: Edge[] = [];
+    
+    // Second pass: Create edges with proper offsets for parallel edges
+    parallelEdgesMap.forEach((transitions, edgeKey) => {
+      // Sort transitions by symbol type to ensure consistent rendering
+      // Character transitions first, then epsilon
+      transitions.sort((a, b) => {
+        if (a.symbol === 'ε' && b.symbol !== 'ε') return 1;
+        if (a.symbol !== 'ε' && b.symbol === 'ε') return -1;
+        return a.symbol.localeCompare(b.symbol);
+      });
       
-      // Create unique ID for each edge
-      return {
-        id: transition.id,
-        source: transition.from,
-        target: transition.to,
-        label: transition.symbol, // Always show transition symbol
-        style: edgeStyle,
-        animated: isEpsilon, // animate only epsilon transitions
-        labelStyle: { 
-          fill: isEpsilon ? '#6E59A5' : '#333', 
-          fontSize: isEpsilon ? 13 : 16, // Larger font for character transitions
-          fontWeight: isEpsilon ? 'normal' : 'bold',
-          background: '#fff',
-          padding: '3px 6px',
-        },
-        labelBgStyle: { 
-          fill: '#F1F0FB',
-          fillOpacity: 0.9, // Increased opacity for better visibility
-          rx: 8,
-          ry: 8,
-        },
-        // Add directional arrowhead marker to all transitions
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: isEpsilon ? '#9E86ED' : '#F97316', // Match edge color
-          width: isEpsilon ? 12 : 18, // Larger arrowhead for character transitions
-          height: isEpsilon ? 12 : 18,
-        },
-        // Use different edge types for better visualization
-        type: 'default', // Default for all edges, then customize below
-        // Configure self-loops with appropriate styling
-        ...(isSelfLoop && {
-          type: 'default',
-          animated: false, // Don't animate self-loops
-          style: {
-            ...edgeStyle,
-            curvature: 0.8, // Increase curvature for self-loops for better visibility
-          },
-          // Add specific settings for self-loops
-          sourceHandle: null,
-          targetHandle: null,
-        }),
-        // Configure regular transitions
-        ...(!isSelfLoop && {
-          type: 'smoothstep',
-          curvature: 0.3,
-        }),
-      };
+      // Calculate curvature based on number of parallel edges
+      const transitionCount = transitions.length;
+      
+      transitions.forEach((transition, index) => {
+        // Style edges based on symbol type (epsilon vs. character)
+        const isEpsilon = transition.symbol === 'ε';
+        
+        // Create distinct styling for character vs epsilon transitions
+        const edgeStyle = {
+          stroke: isEpsilon ? '#9E86ED' : '#F97316', // Changed character transitions to bright orange for visibility
+          strokeWidth: isEpsilon ? 1.5 : 3, // Make character transitions thicker
+          strokeDasharray: isEpsilon ? '5,5' : 'none', // Dashed lines for epsilon transitions
+        };
+
+        // For self-loops, enhance the visualization
+        const isSelfLoop = transition.from === transition.to;
+        
+        // Calculate offset for parallel edges
+        let curvature = 0.3; // Default curvature
+        let labelOffset = 0;
+        
+        if (transitionCount > 1 && !isSelfLoop) {
+          // For multiple edges between same nodes, increase curvature and alternate direction
+          // Distribute curvature evenly among parallel transitions
+          const baseCurvature = 0.2;
+          const curvatureStep = 0.2;
+          const alternateDirection = index % 2 === 0 ? 1 : -1; // Alternate curve direction
+          const offsetIndex = Math.ceil((index + 1) / 2); // 0,1,2,3 -> 1,1,2,2
+          
+          curvature = baseCurvature + (offsetIndex * curvatureStep);
+          curvature *= alternateDirection;
+          
+          // Position label offset based on curve direction
+          labelOffset = alternateDirection * (10 * offsetIndex);
+        }
+        
+        // For self-loops with multiple transitions, vary the angle
+        if (isSelfLoop && transitionCount > 1) {
+          // Calculate different angles for self-loops based on index
+          const baseLoopDistance = 80;
+          const angleOffset = (index * 45) % 360; // Distribute around the circle
+          
+          // Create unique ID for each edge
+          graphEdges.push({
+            id: transition.id,
+            source: transition.from,
+            target: transition.to,
+            label: transition.symbol,
+            style: edgeStyle,
+            animated: isEpsilon,
+            labelStyle: { 
+              fill: isEpsilon ? '#6E59A5' : '#333', 
+              fontSize: isEpsilon ? 13 : 16, // Larger font for character transitions
+              fontWeight: isEpsilon ? 'normal' : 'bold',
+              background: '#fff',
+              padding: '3px 6px',
+            },
+            labelBgStyle: { 
+              fill: '#F1F0FB',
+              fillOpacity: 0.9, // Increased opacity for better visibility
+              rx: 8,
+              ry: 8,
+            },
+            // Add directional arrowhead marker to all transitions
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: isEpsilon ? '#9E86ED' : '#F97316', // Match edge color
+              width: isEpsilon ? 12 : 18, // Larger arrowhead for character transitions
+              height: isEpsilon ? 12 : 18,
+            },
+            type: 'default',
+            animated: false,
+            style: {
+              ...edgeStyle,
+              curvature: 0.8 + (index * 0.1), // Increase curvature for each self-loop
+            },
+            sourceHandle: null,
+            targetHandle: null,
+            // Control loop positioning for self-loops
+            data: {
+              loopAngle: angleOffset,
+              loopDistance: baseLoopDistance + (index * 10),
+            }
+          });
+        } else if (!isSelfLoop) {
+          // For regular edges between different nodes
+          graphEdges.push({
+            id: transition.id,
+            source: transition.from,
+            target: transition.to,
+            label: transition.symbol,
+            style: edgeStyle,
+            animated: isEpsilon,
+            labelStyle: { 
+              fill: isEpsilon ? '#6E59A5' : '#333', 
+              fontSize: isEpsilon ? 13 : 16,
+              fontWeight: isEpsilon ? 'normal' : 'bold',
+              background: '#fff',
+              padding: '3px 6px',
+              transform: `translateY(${labelOffset}px)`, // Offset labels for parallel edges
+            },
+            labelBgStyle: { 
+              fill: '#F1F0FB',
+              fillOpacity: 0.9, 
+              rx: 8,
+              ry: 8,
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: isEpsilon ? '#9E86ED' : '#F97316',
+              width: isEpsilon ? 12 : 18,
+              height: isEpsilon ? 12 : 18,
+            },
+            type: 'smoothstep',
+            // Key property to create curved paths for parallel edges
+            curvature: curvature,
+          });
+        }
+      });
     });
 
     // Add a "Start" indicator arrow for the start state
@@ -243,8 +324,10 @@ const AutomatonVisualizer = ({ automaton, testResult }: AutomatonVisualizerProps
       }
     }
 
-    // Debug transitions
+    // Debug transitions and edge creation
     console.log('Transitions:', automaton.transitions);
+    console.log('Parallel edges:', Array.from(parallelEdgesMap.entries()));
+    console.log('Generated edges:', graphEdges);
 
     setNodes(graphNodes);
     setEdges(graphEdges);
