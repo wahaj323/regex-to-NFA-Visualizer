@@ -1,6 +1,5 @@
 import { Automaton, State, Transition, TestResult } from "../types/types";
 
-// Special characters and symbols
 const EPSILON = 'ε';
 const CONCATENATION = '.';
 const UNION = '|';
@@ -9,432 +8,210 @@ const KLEENE_STAR = '*';
 export class AutomatonBuilder {
   private stateCounter = 0;
 
-  /**
-   * Convert a regular expression to a Non-deterministic Finite Automaton (NFA)
-   * using Thompson's Construction algorithm
-   */
   public buildNFA(regex: string): Automaton {
-    // Reset state counter for each new automaton
     this.stateCounter = 0;
-    
-    // Add concatenation operators explicitly
-    const processedRegex = this.addExplicitConcatenation(regex);
-    
-    // Convert to postfix notation for easier processing
-    const postfix = this.convertToPostfix(processedRegex);
-    
-    // Build NFA using Thompson's construction
+    const processed = this.addExplicitConcatenation(regex);
+    const postfix = this.convertToPostfix(processed);
     return this.buildNFAFromPostfix(postfix);
   }
 
-  /**
-   * Add explicit concatenation operators to the regex
-   */
   private addExplicitConcatenation(regex: string): string {
     let result = '';
-    
     for (let i = 0; i < regex.length; i++) {
-      const current = regex[i];
-      result += current;
-      
-      // Skip if this is the last character or if current character is a special operator
-      if (i === regex.length - 1 || current === '(' || current === UNION) continue;
-      
-      // Check if next character requires a concatenation operator
+      const curr = regex[i];
+      result += curr;
+      if (
+        i === regex.length - 1 ||
+        curr === '(' ||
+        curr === UNION
+      ) continue;
       const next = regex[i + 1];
-      if (next !== UNION && next !== KLEENE_STAR && next !== ')') {
-        // Don't add concatenation after opening parenthesis or union
-        if (current !== '(' && current !== UNION) {
-          result += CONCATENATION;
-        }
+      if (
+        next !== UNION &&
+        next !== KLEENE_STAR &&
+        next !== ')'
+      ) {
+        if (curr !== '(' && curr !== UNION) result += CONCATENATION;
       }
     }
-    
     return result;
   }
 
-  /**
-   * Convert infix regex to postfix notation using Shunting-yard algorithm
-   */
   private convertToPostfix(regex: string): string {
     const output: string[] = [];
-    const operatorStack: string[] = [];
-    
-    // Operator precedence
-    const precedence: Record<string, number> = {
+    const stack: string[] = [];
+    const prec: Record<string, number> = {
       [KLEENE_STAR]: 3,
       [CONCATENATION]: 2,
       [UNION]: 1,
       '(': 0,
     };
-    
-    for (let i = 0; i < regex.length; i++) {
-      const token = regex[i];
-      
-      switch (token) {
-        case '(':
-          operatorStack.push(token);
-          break;
-          
-        case ')':
-          while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== '(') {
-            output.push(operatorStack.pop()!);
-          }
-          operatorStack.pop(); // Discard the opening parenthesis
-          break;
-          
-        case CONCATENATION:
-        case UNION:
-        case KLEENE_STAR:
-          while (
-            operatorStack.length > 0 &&
-            operatorStack[operatorStack.length - 1] !== '(' &&
-            precedence[operatorStack[operatorStack.length - 1]] >= precedence[token]
-          ) {
-            output.push(operatorStack.pop()!);
-          }
-          operatorStack.push(token);
-          break;
-          
-        default:
-          output.push(token); // Character is part of the alphabet
-      }
+    for (const token of regex) {
+      if (token === '(') stack.push(token);
+      else if (token === ')') {
+        while (stack.length && stack[stack.length - 1] !== '(')
+          output.push(stack.pop()!);
+        stack.pop();
+      } else if (token === CONCATENATION || token === UNION || token === KLEENE_STAR) {
+        while (
+          stack.length &&
+          stack[stack.length - 1] !== '(' &&
+          prec[stack[stack.length - 1]] >= prec[token]
+        ) output.push(stack.pop()!);
+        stack.push(token);
+      } else output.push(token);
     }
-    
-    // Pop remaining operators from the stack
-    while (operatorStack.length > 0) {
-      output.push(operatorStack.pop()!);
-    }
-    
+    while (stack.length) output.push(stack.pop()!);
     return output.join('');
   }
 
-  /**
-   * Build an NFA from a postfix regex expression using Thompson's construction
-   */
   private buildNFAFromPostfix(postfix: string): Automaton {
-    const automatonStack: Automaton[] = [];
-    
-    for (let i = 0; i < postfix.length; i++) {
-      const token = postfix[i];
-      
-      switch (token) {
-        case KLEENE_STAR:
-          if (automatonStack.length > 0) {
-            const operand = automatonStack.pop()!;
-            automatonStack.push(this.applyKleeneStar(operand));
-          }
-          break;
-          
-        case CONCATENATION:
-          if (automatonStack.length >= 2) {
-            const right = automatonStack.pop()!;
-            const left = automatonStack.pop()!;
-            automatonStack.push(this.concatenate(left, right));
-          }
-          break;
-          
-        case UNION:
-          if (automatonStack.length >= 2) {
-            const right = automatonStack.pop()!;
-            const left = automatonStack.pop()!;
-            automatonStack.push(this.union(left, right));
-          }
-          break;
-          
-        default:
-          // Single character - create basic NFA
-          automatonStack.push(this.createBasicNFA(token));
+    const stack: Automaton[] = [];
+    for (const token of postfix) {
+      if (token === KLEENE_STAR) {
+        const a = stack.pop()!;
+        stack.push(this.applyKleeneStar(a));
+      } else if (token === CONCATENATION) {
+        const b = stack.pop()!;
+        const a = stack.pop()!;
+        stack.push(this.concatenate(a, b));
+      } else if (token === UNION) {
+        const b = stack.pop()!;
+        const a = stack.pop()!;
+        stack.push(this.union(a, b));
+      } else {
+        stack.push(this.createBasicNFA(token));
       }
     }
-    
-    // Return the final automaton
-    return automatonStack.length > 0 ? automatonStack[0] : this.createEmptyNFA();
+    return stack.length ? stack[0] : this.createEmptyNFA();
   }
 
-  /**
-   * Create a basic NFA for a single character
-   */
   private createBasicNFA(symbol: string): Automaton {
-    const startState = this.createState("start");
-    const acceptState = this.createState("accept");
-    
+    const start = this.createState("start");
+    const accept = this.createState("accept");
     const states: State[] = [
-      { ...startState, isStart: true, isAccept: false },
-      { ...acceptState, isStart: false, isAccept: true }
+      { ...start, isStart: true, isAccept: false },
+      { ...accept, isStart: false, isAccept: true },
     ];
-    
     const transitions: Transition[] = [{
       id: `t_${this.getNextId()}`,
-      from: startState.id,
-      to: acceptState.id,
-      symbol
+      from: start.id,
+      to: accept.id,
+      symbol,
     }];
-    
-    return {
-      states,
-      transitions,
-      startState: startState.id,
-      acceptStates: [acceptState.id]
-    };
+    return { states, transitions, startState: start.id, acceptStates: [accept.id] };
   }
 
-  /**
-   * Create an empty NFA with start and accept states
-   */
   private createEmptyNFA(): Automaton {
-    const startState = this.createState("start");
-    
+    const start = this.createState("start");
     return {
-      states: [{ ...startState, isStart: true, isAccept: true }],
+      states: [{ ...start, isStart: true, isAccept: true }],
       transitions: [],
-      startState: startState.id,
-      acceptStates: [startState.id]
+      startState: start.id,
+      acceptStates: [start.id],
     };
   }
 
-  /**
-   * Apply Kleene star operation to an automaton
-   */
-  private applyKleeneStar(automaton: Automaton): Automaton {
-    const newStartState = this.createState("start");
-    const newAcceptState = this.createState("accept");
-    
-    // Create new states and transitions
+  private applyKleeneStar(a: Automaton): Automaton {
+    const start = this.createState("start");
+    const accept = this.createState("accept");
     const states: State[] = [
-      { ...newStartState, isStart: true, isAccept: false },
-      ...automaton.states.map(s => ({ ...s, isStart: false, isAccept: false })),
-      { ...newAcceptState, isStart: false, isAccept: true }
+      { ...start, isStart: true, isAccept: false },
+      ...a.states.map(s => ({ ...s, isStart: false, isAccept: false })),
+      { ...accept, isStart: false, isAccept: true },
     ];
-    
-    // Build list of transitions
     const transitions: Transition[] = [
-      // Epsilon transition from new start to original start
-      {
-        id: `t_${this.getNextId()}`,
-        from: newStartState.id,
-        to: automaton.startState,
-        symbol: EPSILON
-      },
-      // Epsilon transition from new start to new accept (to handle empty string case)
-      {
-        id: `t_${this.getNextId()}`,
-        from: newStartState.id,
-        to: newAcceptState.id,
-        symbol: EPSILON
-      },
-      // Keep all original transitions
-      ...automaton.transitions,
-      // Add epsilon transitions from original accept states to original start state
-      ...automaton.acceptStates.map(acceptState => ({
-        id: `t_${this.getNextId()}`,
-        from: acceptState,
-        to: automaton.startState,
-        symbol: EPSILON
+      { id: `t_${this.getNextId()}`, from: start.id, to: a.startState, symbol: EPSILON },
+      { id: `t_${this.getNextId()}`, from: start.id, to: accept.id, symbol: EPSILON },
+      ...a.transitions,
+      ...a.acceptStates.map(s => ({
+        id: `t_${this.getNextId()}`, from: s, to: a.startState, symbol: EPSILON
       })),
-      // Add epsilon transitions from original accept states to new accept state
-      ...automaton.acceptStates.map(acceptState => ({
-        id: `t_${this.getNextId()}`,
-        from: acceptState,
-        to: newAcceptState.id,
-        symbol: EPSILON
-      }))
-    ];
-    
-    return {
-      states,
-      transitions,
-      startState: newStartState.id,
-      acceptStates: [newAcceptState.id]
-    };
-  }
-
-  /**
-   * Concatenate two automata
-   */
-  private concatenate(left: Automaton, right: Automaton): Automaton {
-    // Merge states
-    const states: State[] = [
-      ...left.states.map(s => ({ ...s, isAccept: false })),
-      ...right.states.map(s => ({ ...s, isStart: false }))
-    ];
-    
-    // Build list of transitions
-    const transitions: Transition[] = [
-      ...left.transitions,
-      ...right.transitions,
-      // Add epsilon transitions from left's accept states to right's start state
-      ...left.acceptStates.map(acceptState => ({
-        id: `t_${this.getNextId()}`,
-        from: acceptState,
-        to: right.startState,
-        symbol: EPSILON
-      }))
-    ];
-    
-    return {
-      states,
-      transitions,
-      startState: left.startState,
-      acceptStates: right.acceptStates
-    };
-  }
-
-  /**
-   * Union of two automata
-   */
-  private union(left: Automaton, right: Automaton): Automaton {
-    const newStartState = this.createState("start");
-    const newAcceptState = this.createState("accept");
-    
-    // Create new states
-    const states: State[] = [
-      { ...newStartState, isStart: true, isAccept: false },
-      ...left.states.map(s => ({ ...s, isStart: false, isAccept: false })),
-      ...right.states.map(s => ({ ...s, isStart: false, isAccept: false })),
-      { ...newAcceptState, isStart: false, isAccept: true }
-    ];
-    
-    // Build list of transitions
-    const transitions: Transition[] = [
-      // Epsilon transition from new start to left's start
-      {
-        id: `t_${this.getNextId()}`,
-        from: newStartState.id,
-        to: left.startState,
-        symbol: EPSILON
-      },
-      // Epsilon transition from new start to right's start
-      {
-        id: `t_${this.getNextId()}`,
-        from: newStartState.id,
-        to: right.startState,
-        symbol: EPSILON
-      },
-      // Keep all original transitions
-      ...left.transitions,
-      ...right.transitions,
-      // Add epsilon transitions from left's accept states to new accept state
-      ...left.acceptStates.map(acceptState => ({
-        id: `t_${this.getNextId()}`,
-        from: acceptState,
-        to: newAcceptState.id,
-        symbol: EPSILON
+      ...a.acceptStates.map(s => ({
+        id: `t_${this.getNextId()}`, from: s, to: accept.id, symbol: EPSILON
       })),
-      // Add epsilon transitions from right's accept states to new accept state
-      ...right.acceptStates.map(acceptState => ({
-        id: `t_${this.getNextId()}`,
-        from: acceptState,
-        to: newAcceptState.id,
-        symbol: EPSILON
-      }))
     ];
-    
-    return {
-      states,
-      transitions,
-      startState: newStartState.id,
-      acceptStates: [newAcceptState.id]
-    };
+    return { states, transitions, startState: start.id, acceptStates: [accept.id] };
   }
 
-  /**
-   * Test if a string is accepted by the automaton
-   */
+  private concatenate(a: Automaton, b: Automaton): Automaton {
+    const states: State[] = [
+      ...a.states.map(s => ({ ...s, isAccept: false })),
+      ...b.states.map(s => ({ ...s, isStart: false })),
+    ];
+    const transitions: Transition[] = [
+      ...a.transitions,
+      ...b.transitions,
+      ...a.acceptStates.map(s => ({
+        id: `t_${this.getNextId()}`, from: s, to: b.startState, symbol: EPSILON
+      })),
+    ];
+    return { states, transitions, startState: a.startState, acceptStates: b.acceptStates };
+  }
+
+  private union(a: Automaton, b: Automaton): Automaton {
+    const start = this.createState("start");
+    const accept = this.createState("accept");
+    const states: State[] = [
+      { ...start, isStart: true, isAccept: false },
+      ...a.states.map(s => ({ ...s, isStart: false, isAccept: false })),
+      ...b.states.map(s => ({ ...s, isStart: false, isAccept: false })),
+      { ...accept, isStart: false, isAccept: true },
+    ];
+    const transitions: Transition[] = [
+      { id: `t_${this.getNextId()}`, from: start.id, to: a.startState, symbol: EPSILON },
+      { id: `t_${this.getNextId()}`, from: start.id, to: b.startState, symbol: EPSILON },
+      ...a.transitions,
+      ...b.transitions,
+      ...a.acceptStates.map(s => ({ id: `t_${this.getNextId()}`, from: s, to: accept.id, symbol: EPSILON })),
+      ...b.acceptStates.map(s => ({ id: `t_${this.getNextId()}`, from: s, to: accept.id, symbol: EPSILON })),
+    ];
+    return { states, transitions, startState: start.id, acceptStates: [accept.id] };
+  }
+
   public testString(automaton: Automaton, input: string): TestResult {
-    // Start with the epsilon closure of the start state
     let currentStates = this.getEpsilonClosure([automaton.startState], automaton);
-    
-    // Path for visualization
     const path: string[] = [...currentStates];
-    
-    // Process each input symbol
-    for (let i = 0; i < input.length; i++) {
-      const symbol = input[i];
-      
-      // Get next states for the given symbol
+    for (const symbol of input) {
       const nextStates = this.getNextStates(currentStates, symbol, automaton);
-      
-      // If no next states, string is rejected
-      if (nextStates.length === 0) {
-        return { accepted: false, path };
-      }
-      
-      // Update current states and path
+      if (!nextStates.length) return { accepted: false, path };
       currentStates = nextStates;
       path.push(...nextStates);
     }
-    
-    // Check if any of the current states is an accept state
-    const accepted = currentStates.some(state => automaton.acceptStates.includes(state));
-    
-    return { accepted, path };
+    return { accepted: currentStates.some(s => automaton.acceptStates.includes(s)), path };
   }
 
-  /**
-   * Get epsilon closure for a set of states
-   */
   private getEpsilonClosure(states: string[], automaton: Automaton): string[] {
-    const visited: Set<string> = new Set(states);
+    const visited = new Set(states);
     const stack = [...states];
-    
-    while (stack.length > 0) {
+    while (stack.length) {
       const state = stack.pop()!;
-      
-      // Find all epsilon transitions from the current state
-      const epsilonTransitions = automaton.transitions.filter(
-        t => t.from === state && t.symbol === EPSILON
-      );
-      
-      for (const transition of epsilonTransitions) {
-        if (!visited.has(transition.to)) {
-          visited.add(transition.to);
-          stack.push(transition.to);
+      for (const t of automaton.transitions.filter(tr => tr.from === state && tr.symbol === EPSILON)) {
+        if (!visited.has(t.to)) {
+          visited.add(t.to);
+          stack.push(t.to);
         }
       }
     }
-    
     return Array.from(visited);
   }
 
-  /**
-   * Get next states given a set of current states and an input symbol
-   */
   private getNextStates(currentStates: string[], symbol: string, automaton: Automaton): string[] {
-    const nextStates: Set<string> = new Set();
-    
-    // Find all transitions from current states with the given symbol
+    const nextStates = new Set<string>();
     for (const state of currentStates) {
-      const transitions = automaton.transitions.filter(
-        t => t.from === state && t.symbol === symbol
-      );
-      
-      for (const transition of transitions) {
-        nextStates.add(transition.to);
+      for (const t of automaton.transitions.filter(tr => tr.from === state && tr.symbol === symbol)) {
+        nextStates.add(t.to);
       }
     }
-    
-    // Get epsilon closure of the next states
     return this.getEpsilonClosure(Array.from(nextStates), automaton);
   }
 
-  /**
-   * Helper to create a new state
-   */
   private createState(type: string): State {
     const id = `s${this.getNextId()}`;
-    return {
-      id,
-      label: `${type.charAt(0).toUpperCase()}${id.substring(1)}`,
-      isStart: false,
-      isAccept: false
-    };
+    return { id, label: `${type.charAt(0).toUpperCase()}${id.substring(1)}`, isStart: false, isAccept: false };
   }
 
-  /**
-   * Helper to get next ID
-   */
   private getNextId(): number {
-    return ++this.stateCounter;
+    return this.stateCounter++;
   }
 }
