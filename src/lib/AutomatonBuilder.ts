@@ -112,41 +112,91 @@ export class AutomatonBuilder {
     };
   }
 
-  private applyKleeneStar(a: Automaton): Automaton {
+  private applyKleeneStar(nfa: Automaton): Automaton {
     const start = this.createState("start");
     const accept = this.createState("accept");
+  
     const states: State[] = [
-      { ...start, isStart: true, isAccept: false },
-      ...a.states.map(s => ({ ...s, isStart: false, isAccept: false })),
+      { ...start, isStart: true,  isAccept: false },
+      ...nfa.states.map(s => ({ ...s, isStart: false, isAccept: false })),
       { ...accept, isStart: false, isAccept: true },
     ];
+  
     const transitions: Transition[] = [
-      { id: `t_${this.getNextId()}`, from: start.id, to: a.startState, symbol: EPSILON },
-      { id: `t_${this.getNextId()}`, from: start.id, to: accept.id, symbol: EPSILON },
-      ...a.transitions,
-      ...a.acceptStates.map(s => ({
-        id: `t_${this.getNextId()}`, from: s, to: a.startState, symbol: EPSILON
+      // ε from new start → old start
+      { id: `t_${this.getNextId()}`, from: start.id,  to: nfa.startState, symbol: EPSILON },
+      // ε from new start → new accept (to accept empty)
+      { id: `t_${this.getNextId()}`, from: start.id,  to: accept.id,       symbol: EPSILON },
+  
+      // all the original transitions
+      ...nfa.transitions,
+  
+      // for each old accept: ε back to old start (to repeat)
+      ...nfa.acceptStates.map(s => ({
+        id: `t_${this.getNextId()}`,
+        from: s,
+        to: nfa.startState,
+        symbol: EPSILON
       })),
-      ...a.acceptStates.map(s => ({
-        id: `t_${this.getNextId()}`, from: s, to: accept.id, symbol: EPSILON
+  
+      // for each old accept: ε to new accept (to finish)
+      ...nfa.acceptStates.map(s => ({
+        id: `t_${this.getNextId()}`,
+        from: s,
+        to: accept.id,
+        symbol: EPSILON
       })),
     ];
-    return { states, transitions, startState: start.id, acceptStates: [accept.id] };
+  
+    return {
+      states,
+      transitions,
+      startState: start.id,
+      acceptStates: [accept.id],
+    };
   }
+  
+  
 
   private concatenate(a: Automaton, b: Automaton): Automaton {
-    const states: State[] = [
-      ...a.states.map(s => ({ ...s, isAccept: false })),
-      ...b.states.map(s => ({ ...s, isStart: false })),
+    const isBStartAccept = b.acceptStates.includes(b.startState);
+    const newAcceptStates = [
+      ...b.acceptStates.filter(id => id !== b.startState),
+      ...(isBStartAccept ? a.acceptStates : [])
     ];
-    const transitions: Transition[] = [
+    const newAcceptSet = new Set(newAcceptStates);
+
+    const states = [
+      ...a.states.map(s => ({ ...s, isAccept: newAcceptSet.has(s.id) })),
+      ...b.states
+        .filter(s => s.id !== b.startState)
+        .map(s => ({ ...s, isAccept: newAcceptSet.has(s.id) }))
+    ];
+
+    let transitions: Transition[] = [
       ...a.transitions,
-      ...b.transitions,
-      ...a.acceptStates.map(s => ({
-        id: `t_${this.getNextId()}`, from: s, to: b.startState, symbol: EPSILON
-      })),
+      ...b.transitions.filter(t => t.from !== b.startState)
     ];
-    return { states, transitions, startState: a.startState, acceptStates: b.acceptStates };
+
+    for (const t of b.transitions) {
+      if (t.from === b.startState) {
+        for (const acc of a.acceptStates) {
+          transitions.push({
+            id: `t_${this.getNextId()}`,
+            from: acc,
+            to: t.to,
+            symbol: t.symbol
+          });
+        }
+      }
+    }
+
+    return {
+      states,
+      transitions,
+      startState: a.startState,
+      acceptStates: newAcceptStates
+    };
   }
 
   private union(a: Automaton, b: Automaton): Automaton {
