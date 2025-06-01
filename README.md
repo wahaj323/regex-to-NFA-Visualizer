@@ -1,73 +1,43 @@
-# Welcome to your Lovable project
+# Regex to NFA Visualizer
 
-## Project info
+## 🔍 About the Project
 
-**URL**: https://lovable.dev/projects/c2699cdc-c4f8-4708-834b-9ad479dd6bf8
+This is a web-based **Regex to NFA Visualizer** tool that helps users understand how regular expressions are converted into their equivalent **Non-deterministic Finite Automata (NFA)** using **Thompson's Construction Algorithm**.
 
-## How can I edit this code?
+You can input a regular expression and instantly visualize its NFA structure with interactive graph diagrams. The tool also allows you to **test input strings** against the generated NFA to see if they are accepted.
 
-There are several ways of editing your application.
+🔗 **Live Link:** [https://regex-to-nfa-visualizer.netlify.app](https://regex-to-nfa-visualizer.netlify.app)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/c2699cdc-c4f8-4708-834b-9ad479dd6bf8) and start prompting.
+## 🚀 Tech Stack
 
-Changes made via Lovable will be committed automatically to this repo.
+This project is built using:
 
-**Use your preferred IDE**
+- [React.js](https://reactjs.org/)
+- [Vite](https://vitejs.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [shadcn/ui](https://ui.shadcn.com/)
+- [React Flow](https://reactflow.dev/) – for dynamic graph visualization
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🛠️ How to Run the Project Locally
 
-Follow these steps:
+### Prerequisites:
+- Node.js and npm (Install via [nvm](https://github.com/nvm-sh/nvm))
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+### Steps:
+```bash
+# 1. Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 2. Navigate to the project directory
+cd regex-to-nfa-visualizer
 
-# Step 3: Install the necessary dependencies.
-npm i
+# 3. Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 4. Start the development server
 npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/c2699cdc-c4f8-4708-834b-9ad479dd6bf8) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
